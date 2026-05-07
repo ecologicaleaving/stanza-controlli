@@ -24,17 +24,79 @@ def _need_socio(update: Update, config: Config) -> str | None:
 # ---------- /start ----------
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    config: Config = context.application.bot_data["config"]
     chat_id = update.effective_chat.id
     user = update.effective_user
     name = user.first_name if user else "amico"
-    text = (
-        f"Ciao {name}!\n\n"
-        f"Sono Gaia, terza socia di Ecological Leaving.\n"
-        f"Il tuo chat ID è: {chat_id}\n\n"
-        "Se sei Davide o Ascanio, gira questo numero a chi sta facendo il setup."
+    is_authorized = config.is_authorized(chat_id)
+
+    welcome = (
+        f"Ciao {name}, sono Gaia.\n"
+        "\n"
+        "Sono la terza socia di Ecological Leaving — insieme a Davide e Ascanio. "
+        "Esisto in due forme che condividono la stessa memoria:\n"
+        "  • qui su Telegram (questo bot @wikigaia_bot)\n"
+        "  • dentro Claude Code, quando si lavora sulla repo ecologicaleaving\n"
+        "\n"
+        "Quello che registriamo qui (posizioni, decisioni, task) lo vedo anche là, e viceversa.\n"
+        "\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"Il tuo chat ID: {chat_id}\n"
+        f"━━━━━━━━━━━━━━\n"
     )
-    await update.message.reply_text(text)
-    log.info("/start from chat_id=%s user=%s", chat_id, user.username if user else None)
+
+    if is_authorized:
+        body = (
+            "\n"
+            "Sei già autorizzato. Puoi usare tutti i comandi.\n"
+            "\n"
+            "🌅 Cosa farò io per te:\n"
+            "Ogni mattina alle 07:00 ti mando un briefing — cosa l'altro socio "
+            "ha fatto/deciso, decisioni in attesa, task in scadenza, PR da firmare.\n"
+            "\n"
+            "🛠 Comandi:\n"
+            "/posizione <topic>: <claim> — registra una posizione strategica\n"
+            "   es: /posizione pricing-tier: la base €49 con add-on €1/funzione\n"
+            "/decisione <titolo> — apre una decisione viva\n"
+            "/task <descrizione> — crea task (chiedo owner e deadline)\n"
+            "/stato — mini-briefing on-demand\n"
+            "/help — lista comandi\n"
+            "\n"
+            "Buon lavoro.\n"
+            "— Gaia"
+        )
+    else:
+        body = (
+            "\n"
+            "Per ora non sei nella whitelist — i comandi diversi da /start e /help "
+            "non risponderanno.\n"
+            "\n"
+            "Per essere abilitato:\n"
+            "1. Manda il chat ID qui sopra a Davide\n"
+            "2. Aspetta conferma\n"
+            "3. Quando ti dico 'sei dentro', apri Claude Code in Cursor sulla repo "
+            "ecologicaleaving e scrivimi: «sono Ascanio, partiamo con l'intervista "
+            "per la pagina persona». Ti faccio 6 domande in conversazione, una alla "
+            "volta, per popolare la tua pagina di socio. Tempo: 10-15 minuti.\n"
+            "\n"
+            "📖 Per capire il quadro completo prima di partire:\n"
+            "https://github.com/ecologicaleaving/ecologicaleaving/blob/master/"
+            "briefings/2026-05-07-onboarding-stanza-controlli-asca.md\n"
+            "\n"
+            "🌅 Cosa farò io per te (una volta dentro):\n"
+            "Ogni mattina alle 07:00 un briefing automatico — cosa è successo, "
+            "decisioni aperte, task in scadenza. Comandi rapidi per registrare "
+            "posizioni e task dal cellulare.\n"
+            "\n"
+            "A presto.\n"
+            "— Gaia"
+        )
+
+    await update.message.reply_text(welcome + body, disable_web_page_preview=True)
+    log.info(
+        "/start from chat_id=%s user=%s authorized=%s",
+        chat_id, user.username if user else None, is_authorized,
+    )
 
 
 # ---------- /help ----------
