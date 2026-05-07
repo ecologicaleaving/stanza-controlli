@@ -1,8 +1,7 @@
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from telegram import Update
-from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, ConversationHandler
 
 from bot.config import Config
@@ -16,7 +15,6 @@ TASK_OWNER, TASK_DEADLINE = range(2)
 
 
 def _need_socio(update: Update, config: Config) -> str | None:
-    """Restituisce socio o None se non autorizzato (e risponde all'utente)."""
     chat_id = update.effective_chat.id
     if not config.is_authorized(chat_id):
         return None
@@ -30,12 +28,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     name = user.first_name if user else "amico"
     text = (
-        f"Ciao *{name}*\\!\n\n"
-        f"Il tuo chat ID è `{chat_id}`\\.\n\n"
-        "Se sei Davide o Ascanio, gira questo numero a chi sta facendo il setup\\.\n"
-        "Sennò, ciao\\."
+        f"Ciao {name}!\n\n"
+        f"Sono Gaia, terza socia di Ecological Leaving.\n"
+        f"Il tuo chat ID è: {chat_id}\n\n"
+        "Se sei Davide o Ascanio, gira questo numero a chi sta facendo il setup."
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(text)
     log.info("/start from chat_id=%s user=%s", chat_id, user.username if user else None)
 
 
@@ -43,16 +41,16 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
-        "*Comandi Stanza dei Controlli*\n\n"
-        "`/posizione <topic>: <claim>` — registra una posizione (livello B)\n"
-        "`/decisione <titolo>` — apre una decisione viva\n"
-        "`/task <testo>` — crea una task \\(chiede owner e deadline\\)\n"
-        "`/stato` — mini\\-briefing on\\-demand\n"
-        "`/start` — il tuo chat ID\n"
-        "`/help` — questo messaggio\n\n"
-        "Briefing mattutino automatico alle 07:00 \\(Europe/Rome\\)\\."
+        "Comandi Stanza dei Controlli:\n\n"
+        "/posizione <topic>: <claim> — registra una posizione (livello B)\n"
+        "/decisione <titolo> — apre una decisione viva\n"
+        "/task <testo> — crea una task (chiede owner e deadline)\n"
+        "/stato — mini-briefing on-demand\n"
+        "/start — il tuo chat ID\n"
+        "/help — questo messaggio\n\n"
+        "Briefing mattutino automatico alle 07:00 (Europe/Rome)."
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(text)
 
 
 # ---------- /posizione ----------
@@ -81,7 +79,6 @@ async def cmd_posizione(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("Topic e claim non possono essere vuoti.")
         return
 
-    # Inferenza kind: opinion vs fact (heuristica leggera)
     lower = claim.lower()
     opinion_markers = ("penso", "secondo me", "credo", "preferisco", "dovrebbe", "non dobbiamo", "dobbiamo")
     kind = "opinion" if any(m in lower for m in opinion_markers) else "fact"
@@ -217,46 +214,38 @@ async def cmd_stato(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     briefing_pending = await db.briefing_items_pending(socio=socio)
 
     today = date.today().isoformat()
-    lines = [f"📋 *Stato — {today}*", ""]
+    lines = [f"📋 Stato — {today}", ""]
 
-    lines.append(f"📬 *Posizioni nuove di {altro.capitalize()} \\(24h\\)*")
+    lines.append(f"📬 Posizioni nuove di {altro.capitalize()} (24h)")
     if not positions_altro:
-        lines.append("  _nessuna_")
+        lines.append("   nessuna")
     else:
         for p in positions_altro[:5]:
-            lines.append(f"  • {_md(p['topic'])}: {_md(p['claim'])[:80]}")
+            lines.append(f"   • {p['topic']}: {p['claim'][:80]}")
 
     lines.append("")
-    lines.append(f"🟡 *Decisioni aperte*")
+    lines.append("🟡 Decisioni aperte")
     if not decisions_open:
-        lines.append("  _nessuna_")
+        lines.append("   nessuna")
     else:
         for d in decisions_open[:5]:
-            ddl = f" \\(scade {d['deadline']}\\)" if d.get("deadline") else ""
-            lines.append(f"  • {_md(d['title'])}{ddl}")
+            ddl = f" (scade {d['deadline']})" if d.get("deadline") else ""
+            lines.append(f"   • {d['title']}{ddl}")
 
     lines.append("")
-    lines.append(f"📅 *Task in scadenza \\(48h\\)*")
+    lines.append("📅 Task in scadenza (48h)")
     if not tasks_due:
-        lines.append("  _nessuna_")
+        lines.append("   nessuna")
     else:
         for t in tasks_due[:5]:
-            lines.append(f"  • {_md(t['title'])} \\— {t['deadline']}")
+            lines.append(f"   • {t['title']} — {t['deadline']}")
 
     lines.append("")
-    lines.append("✍️ *In coda di approvazione/lettura*")
+    lines.append("✍️ In coda di approvazione/lettura")
     if not briefing_pending:
-        lines.append("  _niente_")
+        lines.append("   niente")
     else:
         for b in briefing_pending[:5]:
-            lines.append(f"  • {_md(b['title'])[:80]}")
+            lines.append(f"   • {b['title'][:80]}")
 
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
-
-
-def _md(s: str) -> str:
-    """Escape MarkdownV2 special chars."""
-    if s is None:
-        return ""
-    specials = r"_*[]()~`>#+-=|{}.!"
-    return "".join("\\" + c if c in specials else c for c in str(s))
+    await update.message.reply_text("\n".join(lines))
