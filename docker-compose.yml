@@ -1,0 +1,18 @@
+services:
+  bot:
+    build: .
+    container_name: stanza-controlli-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - supabase_network_maestro-test
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  supabase_network_maestro-test:
+    external: true
