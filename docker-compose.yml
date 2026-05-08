@@ -7,6 +7,12 @@ services:
       - .env
     networks:
       - supabase_network_maestro-test
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(3); s.connect(('supabase_db_maestro-test', 5432)); s.close()\""]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging:
       driver: json-file
       options:

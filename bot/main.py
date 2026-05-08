@@ -28,6 +28,7 @@ from bot.handlers import (
     task_owner,
 )
 from bot.scheduler import start_scheduler
+from bot.watchdog import run_watchdog
 
 
 def setup_logging(level: str) -> None:
@@ -93,10 +94,14 @@ async def amain() -> None:
     await application.start()
     await application.updater.start_polling(drop_pending_updates=True)
 
+    # Watchdog: ping Telegram + DB ogni 10 min, sys.exit(1) dopo 3 fail
+    watchdog_task = asyncio.create_task(run_watchdog(application.bot, db))
+
     try:
         await stop_event.wait()
     finally:
         log.info("shutdown in corso")
+        watchdog_task.cancel()
         scheduler.shutdown(wait=False)
         await application.updater.stop()
         await application.stop()
