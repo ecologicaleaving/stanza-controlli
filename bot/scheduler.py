@@ -17,7 +17,11 @@ def start_scheduler(bot: Bot, db: DB, config: Config) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=config.briefing_timezone)
     scheduler.add_job(
         send_morning_briefing,
-        trigger=CronTrigger(hour=config.briefing_hour, minute=0),
+        trigger=CronTrigger(
+            hour=config.briefing_hour,
+            minute=0,
+            timezone=config.briefing_timezone,
+        ),
         kwargs={"bot": bot, "db": db, "config": config},
         id="morning_briefing",
         replace_existing=True,
