@@ -19,6 +19,7 @@ class Config:
     authorized_chat_ids: set[int]
     davide_chat_id: int | None
     ascanio_chat_id: int | None
+    group_chat_id: int | None
     briefing_hour: int
     briefing_timezone: str
     log_level: str
@@ -30,12 +31,14 @@ class Config:
         authorized = _parse_chat_ids(os.environ.get("AUTHORIZED_CHAT_IDS", ""))
         davide = os.environ.get("DAVIDE_CHAT_ID")
         ascanio = os.environ.get("ASCANIO_CHAT_ID")
+        group = os.environ.get("GROUP_CHAT_ID")
         return cls(
             bot_token=bot_token,
             database_url=database_url,
             authorized_chat_ids=authorized,
             davide_chat_id=int(davide) if davide else None,
             ascanio_chat_id=int(ascanio) if ascanio else None,
+            group_chat_id=int(group) if group else None,
             briefing_hour=int(os.environ.get("BRIEFING_HOUR", "7")),
             briefing_timezone=os.environ.get("BRIEFING_TIMEZONE", "Europe/Rome"),
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -45,6 +48,19 @@ class Config:
         if chat_id == self.davide_chat_id:
             return "davide"
         if chat_id == self.ascanio_chat_id:
+            return "ascanio"
+        return None
+
+    def socio_for_user(self, user_id: int) -> str | None:
+        """Identifica il socio a partire dall'user_id Telegram.
+
+        Nei DM il chat_id privato coincide con l'user_id, quindi riusiamo
+        davide_chat_id / ascanio_chat_id come proxy. Funziona sia in DM
+        che nel gruppo (dove il sender_user_id è sempre l'id univoco dell'utente).
+        """
+        if user_id == self.davide_chat_id:
+            return "davide"
+        if user_id == self.ascanio_chat_id:
             return "ascanio"
         return None
 

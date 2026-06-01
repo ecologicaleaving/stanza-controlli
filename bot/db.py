@@ -118,6 +118,57 @@ class DB:
             rows = await conn.fetch(query, *params)
             return [dict(r) for r in rows]
 
+    # ---------------- tg_inbox / tg_outbox (F1 — issue #2) ----------------
+
+    async def insert_inbox(
+        self,
+        *,
+        tg_message_id: int,
+        chat_id: int,
+        socio: str | None,
+        sender_user_id: int,
+        text: str,
+        reply_to_message_id: int | None,
+        is_to_gaia: bool,
+    ) -> int:
+        """Scrive un messaggio in tg_inbox e ritorna l'id generato."""
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO el_brain.tg_inbox
+                  (tg_message_id, chat_id, socio, sender_user_id, text,
+                   reply_to_message_id, is_to_gaia)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id
+                """,
+                tg_message_id, chat_id, socio, sender_user_id, text,
+                reply_to_message_id, is_to_gaia,
+            )
+            return row["id"]
+
+    async def insert_outbox(
+        self,
+        *,
+        chat_id: int,
+        text: str,
+        in_reply_to: int | None = None,
+        model: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+    ) -> int:
+        """Logga un messaggio inviato da Gaia in tg_outbox e ritorna l'id."""
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO el_brain.tg_outbox
+                  (chat_id, text, in_reply_to, model, tokens_in, tokens_out)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id
+                """,
+                chat_id, text, in_reply_to, model, tokens_in, tokens_out,
+            )
+            return row["id"]
+
     # ---------------- briefing_items (esistente) ----------------
 
     async def briefing_items_pending(self, *, socio: str) -> list[dict]:
