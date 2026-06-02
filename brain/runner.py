@@ -13,6 +13,7 @@ senza risposta, così Gaia parte "pulita" e risponde solo ai messaggi nuovi.
 
 import asyncio
 import logging
+import socket
 import sys
 from pathlib import Path
 
@@ -39,6 +40,21 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger("gaia.runner")
+
+# Lock single-instance: bind esclusivo su una porta locale. Se occupata,
+# c'è già un cervello attivo (es. auto-start + avvio manuale) → si esce.
+_LOCK_PORT = 47654
+
+
+def acquire_single_instance_lock() -> socket.socket:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", _LOCK_PORT))
+        s.listen(1)
+    except OSError:
+        log.error("un'altra istanza del cervello è già attiva — esco")
+        sys.exit(0)
+    return s
 
 
 async def process_once(cfg: Config, db: BrainDB, system_prompt: str) -> None:
@@ -75,6 +91,7 @@ async def process_once(cfg: Config, db: BrainDB, system_prompt: str) -> None:
 
 
 async def main() -> None:
+    _lock = acquire_single_instance_lock()  # noqa: F841 — tenuto vivo per tutta la sessione
     cfg = Config.load()
     tunnel = SSHTunnel(cfg)
     db = BrainDB(cfg)
