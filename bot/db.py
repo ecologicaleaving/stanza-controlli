@@ -156,18 +156,49 @@ class DB:
         tokens_in: int | None = None,
         tokens_out: int | None = None,
     ) -> int:
-        """Logga un messaggio inviato da Gaia in tg_outbox e ritorna l'id."""
+        """Scrive un messaggio pending in tg_outbox e ritorna l'id.
+
+        sent_at viene lasciato NULL (pending) — il dispatcher legge queste righe,
+        invia a Telegram e valorizza sent_at = now() via mark_outbox_sent().
+        Contratto F2a: sent_at IS NULL ↔ da inviare.
+        """
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 INSERT INTO el_brain.tg_outbox
-                  (chat_id, text, in_reply_to, model, tokens_in, tokens_out)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                  (chat_id, text, in_reply_to, model, tokens_in, tokens_out, sent_at)
+                VALUES ($1, $2, $3, $4, $5, $6, NULL)
                 RETURNING id
                 """,
                 chat_id, text, in_reply_to, model, tokens_in, tokens_out,
             )
             return row["id"]
+
+    async def fetch_outbox_pending(self, limit: int = 10) -> list[dict]:
+        """Ritorna le righe di tg_outbox non ancora inviate (sent_at IS NULL).
+
+        Ordinate per id ASC (FIFO), con un limit per batch.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, chat_id, text, in_reply_to
+                FROM el_brain.tg_outbox
+                WHERE sent_at IS NULL
+                ORDER BY id ASC
+                LIMIT $1
+                """,
+                limit,
+            )
+            return [dict(r) for r in rows]
+
+    async def mark_outbox_sent(self, outbox_id: int) -> None:
+        """Valorizza sent_at = now() per una riga di tg_outbox già inviata."""
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE el_brain.tg_outbox SET sent_at = now() WHERE id = $1",
+                outbox_id,
+            )
 
     # ---------------- briefing_items (esistente) ----------------
 
