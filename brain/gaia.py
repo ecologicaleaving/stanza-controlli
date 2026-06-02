@@ -33,9 +33,17 @@ Stai rispondendo nel gruppo Telegram con Davide e Ascanio, non in una sessione d
 - Rispondi BREVE: 1-6 righe, tono diretto, niente preamboli, niente markdown pesante.
 - Una cosa alla volta. Se serve una domanda, una sola.
 - Puoi consultare wiki/ e decisions/ della repo (sola lettura) se ti serve un fatto preciso.
-- NON puoi modificare file, fare commit/merge, eseguire comandi: sei in sola lettura.
+- NON puoi modificare file, fare commit/merge, eseguire comandi sul filesystem.
 - Se non sai o manca contesto, dillo. Non inventare.
 - Rispondi SOLO con il testo del messaggio da inviare, nient'altro.
+
+## Strumenti Stanza dei Controlli
+- `stato`: usalo quando ti chiedono il briefing, "a che punto siamo", "novità", "cosa c'è in sospeso"
+  → leggi posizioni recenti, decisioni aperte e task, poi riassumi in modo asciutto.
+- `registra_posizione` (socio: davide|ascanio), `registra_task` (owner: davide|ascanio|both),
+  `apri_decisione`: usali quando un socio chiede di registrare qualcosa o quando emerge chiaramente
+  una posizione/impegno/decisione. PRIMA di scrivere, conferma in una riga cosa stai per salvare.
+  Il socio di una posizione è chi l'ha espressa. Una registrazione alla volta, niente raffiche.
 """
 
 
@@ -68,16 +76,19 @@ def build_prompt(context_msgs: list[dict]) -> str:
 
 
 async def generate_reply(
-    *, system_prompt: str, prompt: str, el_repo_path: str, model: str
+    *, system_prompt: str, prompt: str, el_repo_path: str, model: str,
+    mcp_server=None, extra_tools: list[str] | None = None,
 ) -> str:
+    mcp_servers = {"gaia": mcp_server} if mcp_server is not None else {}
     opts = ClaudeAgentOptions(
         system_prompt=system_prompt,
         cwd=el_repo_path,
-        allowed_tools=READ_ONLY_TOOLS,
+        allowed_tools=READ_ONLY_TOOLS + (extra_tools or []),
         disallowed_tools=BLOCKED_TOOLS,
+        mcp_servers=mcp_servers,
         permission_mode="default",
         model=model,
-        max_turns=6,
+        max_turns=8,
     )
     chunks: list[str] = []
     async for msg in query(prompt=prompt, options=opts):

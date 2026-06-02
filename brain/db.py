@@ -96,3 +96,83 @@ class BrainDB:
                 "UPDATE el_brain.tg_inbox SET processed = true WHERE id = ANY($1::bigint[])",
                 ids,
             )
+
+    # ---------------- Stanza dei Controlli: lettura (briefing) ----------------
+
+    async def positions_since(self, *, hours: int) -> list[dict]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT socio, topic, claim, kind, created_at
+                FROM el_brain.positions
+                WHERE created_at >= now() - ($1::int * interval '1 hour')
+                ORDER BY created_at DESC
+                """,
+                hours,
+            )
+            return [dict(r) for r in rows]
+
+    async def decisions_open_active(self) -> list[dict]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT title, status, deadline, parent_topic, created_at
+                FROM el_brain.decisions_open
+                WHERE status NOT IN ('closed','dropped')
+                ORDER BY created_at DESC
+                """
+            )
+            return [dict(r) for r in rows]
+
+    async def tasks_due_within(self, *, days: int) -> list[dict]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT title, owner, status, deadline
+                FROM el_brain.tasks
+                WHERE status NOT IN ('done','dropped')
+                  AND deadline IS NOT NULL
+                  AND deadline <= current_date + ($1::int * interval '1 day')
+                ORDER BY deadline ASC
+                """,
+                days,
+            )
+            return [dict(r) for r in rows]
+
+    # ---------------- Stanza dei Controlli: scrittura (registrazione) ----------------
+
+    async def insert_position(self, *, socio: str, topic: str, claim: str, kind: str) -> str:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO el_brain.positions (socio, topic, claim, kind, source)
+                VALUES ($1, $2, $3, $4, 'telegram')
+                RETURNING id::text
+                """,
+                socio, topic, claim, kind,
+            )
+            return row["id"]
+
+    async def insert_task(self, *, title: str, owner: str, deadline: str | None) -> str:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO el_brain.tasks (title, owner, deadline)
+                VALUES ($1, $2, $3::date)
+                RETURNING id::text
+                """,
+                title, owner, deadline,
+            )
+            return row["id"]
+
+    async def insert_decision_open(self, *, title: str) -> str:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO el_brain.decisions_open (title)
+                VALUES ($1)
+                RETURNING id::text
+                """,
+                title,
+            )
+            return row["id"]

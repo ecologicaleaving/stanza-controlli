@@ -27,6 +27,7 @@ for _stream in (sys.stdout, sys.stderr):
 from config import Config
 from db import BrainDB
 from gaia import build_prompt, generate_reply, load_system_prompt
+from tools import TOOL_NAMES, build_gaia_server
 from tunnel import SSHTunnel
 
 # Log su file (per l'avvio headless via Task Scheduler) + stream se in console.
@@ -57,7 +58,7 @@ def acquire_single_instance_lock() -> socket.socket:
     return s
 
 
-async def process_once(cfg: Config, db: BrainDB, system_prompt: str) -> None:
+async def process_once(cfg: Config, db: BrainDB, system_prompt: str, mcp_server) -> None:
     triggers = await db.fetch_new_triggers()
     if not triggers:
         return
@@ -71,6 +72,8 @@ async def process_once(cfg: Config, db: BrainDB, system_prompt: str) -> None:
         prompt=prompt,
         el_repo_path=cfg.el_repo_path,
         model=cfg.model,
+        mcp_server=mcp_server,
+        extra_tools=TOOL_NAMES,
     )
 
     handled_ids = [t["id"] for t in triggers]
@@ -99,7 +102,8 @@ async def main() -> None:
 
     tunnel.ensure()
     await db.connect()
-    log.info("cervello Gaia avviato — DB connesso via tunnel")
+    gaia_server = build_gaia_server(db)
+    log.info("cervello Gaia avviato — DB connesso via tunnel, tool Stanza dei Controlli pronti")
 
     drained = await db.drain_backlog()
     if drained:
@@ -109,7 +113,7 @@ async def main() -> None:
         while True:
             try:
                 tunnel.ensure()
-                await process_once(cfg, db, system_prompt)
+                await process_once(cfg, db, system_prompt, gaia_server)
             except Exception:
                 log.exception("errore nel ciclo — continuo")
             await asyncio.sleep(cfg.poll_interval_sec)
