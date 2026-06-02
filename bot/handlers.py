@@ -257,6 +257,85 @@ async def task_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 
+# ---------- on_group_message (F1 — tg_inbox inbound) ----------
+
+async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Cattura messaggi testuali nel gruppo e li scrive in tg_inbox (F1 — issue #2).
+
+    Loop guard: ignora i messaggi inviati dal bot stesso o da altri bot, per evitare
+    che Gaia ingerisca le proprie risposte e crei un loop di processamento.
+
+    Trigger policy is_to_gaia (calcolata a write-time):
+      (a) il testo menziona @wikigaia_bot o inizia con "gaia" (case-insensitive)
+      (b) è una reply a un messaggio inviato dal bot
+
+    TODO (F1 — punto 4 trigger policy NON implementato):
+      Rilevazione automatica "posizione livello B" — intervento conservativo solo per
+      proporre la registrazione. Da implementare in F2/F3 quando il runner è attivo.
+
+    Nota: questo handler NON invia risposte. La risposta è responsabilità di F2.
+    """
+    config: Config = context.application.bot_data["config"]
+    db: DB = context.application.bot_data["db"]
+
+    # Loop guard — ignora bot (incluso sé stesso)
+    user = update.effective_user
+    if user is None or user.is_bot:
+        return
+
+    message = update.message
+    if message is None or not message.text:
+        return
+
+    tg_message_id: int = message.message_id
+    chat_id: int = update.effective_chat.id
+    sender_user_id: int = user.id
+    text: str = message.text
+
+    reply_to_message_id: int | None = None
+    if message.reply_to_message is not None:
+        reply_to_message_id = message.reply_to_message.message_id
+
+    # Trigger policy — (a): menzione esplicita di Gaia
+    text_lower = text.lower().strip()
+    mentions_gaia = (
+        "@wikigaia_bot" in text_lower
+        or text_lower.startswith("gaia")
+    )
+
+    # Trigger policy — (b): reply a un messaggio del bot
+    is_reply_to_bot = (
+        message.reply_to_message is not None
+        and message.reply_to_message.from_user is not None
+        and message.reply_to_message.from_user.is_bot
+    )
+
+    is_to_gaia: bool = mentions_gaia or is_reply_to_bot
+
+    # Identifica il socio tramite user_id (funziona sia in DM che nel gruppo)
+    socio: str | None = config.socio_for_user(sender_user_id)
+    if socio is None:
+        log.warning(
+            "on_group_message: utente sconosciuto (user_id=%s, chat_id=%s) — "
+            "ingerito con socio NULL",
+            sender_user_id, chat_id,
+        )
+
+    inbox_id = await db.insert_inbox(
+        tg_message_id=tg_message_id,
+        chat_id=chat_id,
+        socio=socio,
+        sender_user_id=sender_user_id,
+        text=text,
+        reply_to_message_id=reply_to_message_id,
+        is_to_gaia=is_to_gaia,
+    )
+    log.info(
+        "tg_inbox id=%s chat_id=%s socio=%s is_to_gaia=%s tg_msg=%s",
+        inbox_id, chat_id, socio, is_to_gaia, tg_message_id,
+    )
+
+
 # ---------- /stato ----------
 
 async def cmd_stato(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

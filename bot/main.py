@@ -23,10 +23,12 @@ from bot.handlers import (
     cmd_start,
     cmd_stato,
     cmd_task_start,
+    on_group_message,
     task_cancel,
     task_deadline,
     task_owner,
 )
+from bot.dispatcher import dispatch_outbox
 from bot.scheduler import start_scheduler
 from bot.watchdog import run_watchdog
 
@@ -71,8 +73,30 @@ async def amain() -> None:
     )
     application.add_handler(task_conv)
 
+    # Cattura messaggi testuali del gruppo → tg_inbox (F1 — issue #2).
+    # Registrato in group=1 (dopo il ConversationHandler in group=0) per evitare
+    # conflitti durante le conversazioni /task attive: i messaggi di stato del
+    # ConversationHandler vengono gestiti da task_conv prima che arrivino qui.
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, on_group_message),
+        group=1,
+    )
+
     # Scheduler briefing mattutino
     scheduler = start_scheduler(application.bot, db, config)
+
+    # Dispatcher outbox F2a: job ricorrente ogni 8 secondi.
+    # Legge tg_outbox WHERE sent_at IS NULL e invia i messaggi pending a Telegram.
+    # Il cervello (brain/, PC) scrive lì con sent_at = NULL; questo job chiude il loop.
+    async def _dispatch_job(context) -> None:  # type: ignore[type-arg]
+        await dispatch_outbox(context.bot, context.application.bot_data["db"])
+
+    application.job_queue.run_repeating(
+        _dispatch_job,
+        interval=8,
+        first=8,
+        name="outbox_dispatcher",
+    )
 
     # Avvio polling
     log.info("bot avviato — polling")
