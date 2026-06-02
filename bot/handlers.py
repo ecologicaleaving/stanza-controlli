@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import date, datetime
 
 from telegram import Update
@@ -296,11 +297,11 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if message.reply_to_message is not None:
         reply_to_message_id = message.reply_to_message.message_id
 
-    # Trigger policy — (a): menzione esplicita di Gaia
+    # Trigger policy — (a): menzione di Gaia (nome ovunque nel testo, non solo a inizio frase)
     text_lower = text.lower().strip()
     mentions_gaia = (
         "@wikigaia_bot" in text_lower
-        or text_lower.startswith("gaia")
+        or re.search(r"\bgaia\b", text_lower) is not None
     )
 
     # Trigger policy — (b): reply a un messaggio del bot
