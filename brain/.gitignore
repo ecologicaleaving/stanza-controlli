@@ -1,0 +1,8 @@
+# Cervello Gaia (gira sul PC, NON nel container VPS)
+.venv/
+.env
+__pycache__/
+*.pyc
+_spike.py
+_test_live.py
+*.log
