@@ -33,8 +33,10 @@ copy brain\.env.example brain\.env   # poi compila i valori (NON committare .env
 ## Avvio
 
 - Manuale: `brain\start_gaia_brain.bat`
-- Automatico: registrato nel **Task Scheduler** (trigger *At log on*, task `GaiaBrain`).
-  Verifica: `schtasks /Query /TN GaiaBrain`
+- Automatico: launcher `GaiaBrain.bat` nella **cartella Startup utente**
+  (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\`) — parte al login,
+  nessun privilegio admin. Richiama `start_gaia_brain.bat`.
+  Il lock single-instance evita doppi runner.
 
 ## Note
 
